@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CODE_LENGTH, generateCode } from '../src/lib/shortCode.js';
+import { CODE_LENGTH, generateCode } from '@/lib/shortCode';
 
 describe('generateCode', () => {
   it('returns a code of the default length', () => {

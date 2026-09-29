@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseTargetUrl } from '../src/lib/targetUrl.js';
+import { parseTargetUrl } from '@/lib/targetUrl';
 
 const OWN_HOST = 'localhost';
 

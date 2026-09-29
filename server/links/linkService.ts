@@ -1,6 +1,6 @@
 import type { Redis } from 'ioredis';
-import { generateCode } from '../lib/shortCode.js';
-import type { Link, LinkRepository } from './linkRepository.js';
+import { generateCode } from '@/lib/shortCode';
+import type { Link, LinkRepository } from './linkRepository';
 
 const UNIQUE_VIOLATION = '23505';
 const MAX_ATTEMPTS = 5;
