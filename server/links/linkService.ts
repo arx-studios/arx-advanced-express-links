@@ -43,7 +43,7 @@ export class LinkService {
     if (input.alias) {
       try {
         const link = await this.repo.insert({ code: input.alias, longUrl, ownerId, expiresAt });
-        await this.redis.del(`link:${link.code}`);
+        await this.cacheDel(`link:${link.code}`);
         return { link, created: true };
       } catch (err) {
         if (isUniqueViolation(err)) throw new AliasTakenError(`Alias "${input.alias}" is taken`);
@@ -75,7 +75,7 @@ export class LinkService {
           continue;
         }
 
-        await this.redis.del(`link:${link.code}`);
+        await this.cacheDel(`link:${link.code}`);
         return { link, created: true };
       } catch (err) {
         if (!isUniqueViolation(err)) throw err;
@@ -87,12 +87,14 @@ export class LinkService {
   async resolve(code: string): Promise<string | null> {
     const key = `link:${code}`;
 
-    const cached = await this.redis.get(key);
-    if (cached !== null) return cached === NOT_FOUND ? null : cached;
+    const cached = await this.cacheGet(key);
+    if (typeof cached === 'string') return cached === NOT_FOUND ? null : cached;
+    // Cache unreachable: serve from Postgres and don't wait on writes that would also fail.
+    const cacheUp = cached === null;
 
     const link = await this.repo.findByCode(code);
     if (!link || (link.expiresAt && link.expiresAt <= new Date())) {
-      await this.redis.set(key, NOT_FOUND, 'EX', NEGATIVE_TTL_SECONDS);
+      if (cacheUp) await this.cacheSet(key, NOT_FOUND, NEGATIVE_TTL_SECONDS);
       return null;
     }
 
@@ -101,7 +103,7 @@ export class LinkService {
       const secondsLeft = Math.ceil((link.expiresAt.getTime() - Date.now()) / 1000);
       ttl = Math.min(ttl, secondsLeft);
     }
-    await this.redis.set(key, link.longUrl, 'EX', ttl);
+    if (cacheUp) await this.cacheSet(key, link.longUrl, ttl);
     return link.longUrl;
   }
 
@@ -123,7 +125,7 @@ export class LinkService {
   // to one flush interval behind. One MGET for the whole page.
   private async withBufferedClicks(links: Link[]): Promise<Link[]> {
     if (links.length === 0) return links;
-    const buffered = await this.redis.mget(links.map((link) => `clicks:${link.code}`));
+    const buffered = await this.cacheMget(links.map((link) => `clicks:${link.code}`));
     return links.map((link, i) => ({
       ...link,
       clickCount: link.clickCount + (Number(buffered[i]) || 0),
@@ -141,7 +143,44 @@ export class LinkService {
   async delete(ownerId: string, code: string): Promise<boolean> {
     const deleted = await this.repo.softDelete(ownerId, code);
     // Drop the cached target so the short link stops working right away.
-    if (deleted) await this.redis.del(`link:${code}`);
+    if (deleted) await this.cacheDel(`link:${code}`);
     return deleted;
+  }
+
+  // Redis is a cache in front of Postgres, not a source of truth, so a Redis
+  // outage must not take links down: these log and carry on without the cache.
+  // null = cache miss, undefined = cache unreachable.
+  private async cacheGet(key: string): Promise<string | null | undefined> {
+    try {
+      return await this.redis.get(key);
+    } catch (err) {
+      console.warn('cache read failed, falling back to Postgres', err);
+      return undefined;
+    }
+  }
+
+  private async cacheSet(key: string, value: string, ttlSeconds: number): Promise<void> {
+    try {
+      await this.redis.set(key, value, 'EX', ttlSeconds);
+    } catch (err) {
+      console.warn('cache write failed', err);
+    }
+  }
+
+  private async cacheDel(key: string): Promise<void> {
+    try {
+      await this.redis.del(key);
+    } catch (err) {
+      console.warn('cache delete failed', err);
+    }
+  }
+
+  private async cacheMget(keys: string[]): Promise<(string | null)[]> {
+    try {
+      return await this.redis.mget(keys);
+    } catch (err) {
+      console.warn('cache read failed, click counts may lag', err);
+      return keys.map(() => null);
+    }
   }
 }

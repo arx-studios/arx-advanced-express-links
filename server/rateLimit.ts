@@ -15,12 +15,20 @@ export async function rateLimit(
   windowSeconds: number,
 ): Promise<RateLimitResult> {
   const bucket = `ratelimit:${key}`;
-  const results = await redis
-    .multi()
-    .incr(bucket)
-    .expire(bucket, windowSeconds, 'NX')
-    .ttl(bucket)
-    .exec();
+  let results;
+  try {
+    results = await redis
+      .multi()
+      .incr(bucket)
+      .expire(bucket, windowSeconds, 'NX')
+      .ttl(bucket)
+      .exec();
+  } catch (err) {
+    // Fail open: every caller is signed in, and a Redis outage shouldn't stop
+    // everyone from creating links.
+    console.warn('rate limit check failed, allowing request', err);
+    return { allowed: true, retryAfterSeconds: 0 };
+  }
 
   const count = Number(results?.[0]?.[1]);
   const ttl = Number(results?.[2]?.[1]);

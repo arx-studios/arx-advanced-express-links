@@ -4,6 +4,8 @@ import { z } from 'zod';
 const EnvSchema = z.object({
   BASE_URL: z.url(),
   DATABASE_URL: z.string().min(1),
+  // PEM certificate for verifying the database's TLS certificate (Supabase).
+  DATABASE_CA_CERT: z.string().min(1).optional(),
   REDIS_URL: z.string().min(1),
   CREATE_LINKS_PER_MINUTE: z.coerce.number().int().positive().default(10),
 });
