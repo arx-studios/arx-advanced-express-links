@@ -1,4 +1,5 @@
 import type { Redis } from 'ioredis';
+import { withTimeout } from '@/lib/timeout';
 
 export interface RateLimitResult {
   allowed: boolean;
@@ -17,16 +18,15 @@ export async function rateLimit(
   const bucket = `ratelimit:${key}`;
   let results;
   try {
-    results = await redis
-      .multi()
-      .incr(bucket)
-      .expire(bucket, windowSeconds, 'NX')
-      .ttl(bucket)
-      .exec();
+    results = await withTimeout(
+      redis.multi().incr(bucket).expire(bucket, windowSeconds, 'NX').ttl(bucket).exec(),
+      1_000,
+      'rate limit check',
+    );
   } catch (err) {
-    // Fail open: every caller is signed in, and a Redis outage shouldn't stop
-    // everyone from creating links.
-    console.warn('rate limit check failed, allowing request', err);
+    // Fail open: every caller is signed in, and a slow or unreachable Redis
+    // shouldn't stop everyone from creating links.
+    console.warn(`rate limit check skipped, allowing request: ${err instanceof Error ? err.message : err}`);
     return { allowed: true, retryAfterSeconds: 0 };
   }
 

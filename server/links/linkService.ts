@@ -1,5 +1,6 @@
 import type { Redis } from 'ioredis';
 import { generateCode } from '@/lib/shortCode';
+import { withTimeout } from '@/lib/timeout';
 import type { Link, LinkRepository } from './linkRepository';
 
 const UNIQUE_VIOLATION = '23505';
@@ -8,6 +9,8 @@ const CACHE_TTL_SECONDS = 60 * 60 * 24;
 const NEGATIVE_TTL_SECONDS = 60;
 const NOT_FOUND = '__none__';
 const PAGE_SIZE = 20;
+// App and Redis share a region, so a healthy command answers in milliseconds.
+const CACHE_TIMEOUT_MS = 500;
 
 export class AliasTakenError extends Error {}
 
@@ -147,40 +150,46 @@ export class LinkService {
     return deleted;
   }
 
-  // Redis is a cache in front of Postgres, not a source of truth, so a Redis
-  // outage must not take links down: these log and carry on without the cache.
-  // null = cache miss, undefined = cache unreachable.
+  // Redis is a cache in front of Postgres, not a source of truth, so a slow or
+  // unreachable Redis (including a fresh instance still logging in) must not
+  // hold links up: each call waits at most CACHE_TIMEOUT_MS, then carries on
+  // without the cache. A timed-out command still runs once Redis is ready.
+  // cacheGet: null = cache miss, undefined = cache unavailable.
   private async cacheGet(key: string): Promise<string | null | undefined> {
     try {
-      return await this.redis.get(key);
+      return await withTimeout(this.redis.get(key), CACHE_TIMEOUT_MS, 'cache read');
     } catch (err) {
-      console.warn('cache read failed, falling back to Postgres', err);
+      console.warn(`cache read skipped, using Postgres: ${errorMessage(err)}`);
       return undefined;
     }
   }
 
   private async cacheSet(key: string, value: string, ttlSeconds: number): Promise<void> {
     try {
-      await this.redis.set(key, value, 'EX', ttlSeconds);
+      await withTimeout(this.redis.set(key, value, 'EX', ttlSeconds), CACHE_TIMEOUT_MS, 'cache write');
     } catch (err) {
-      console.warn('cache write failed', err);
+      console.warn(`cache write skipped: ${errorMessage(err)}`);
     }
   }
 
   private async cacheDel(key: string): Promise<void> {
     try {
-      await this.redis.del(key);
+      await withTimeout(this.redis.del(key), CACHE_TIMEOUT_MS, 'cache delete');
     } catch (err) {
-      console.warn('cache delete failed', err);
+      console.warn(`cache delete skipped: ${errorMessage(err)}`);
     }
   }
 
   private async cacheMget(keys: string[]): Promise<(string | null)[]> {
     try {
-      return await this.redis.mget(keys);
+      return await withTimeout(this.redis.mget(keys), CACHE_TIMEOUT_MS, 'cache read');
     } catch (err) {
-      console.warn('cache read failed, click counts may lag', err);
+      console.warn(`cache read skipped, click counts may lag: ${errorMessage(err)}`);
       return keys.map(() => null);
     }
   }
+}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }

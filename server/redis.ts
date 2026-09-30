@@ -7,14 +7,14 @@ const globalForRedis = globalThis as typeof globalThis & { axlRedis?: Redis };
 export function getRedis(): Redis {
   if (!globalForRedis.axlRedis) {
     const redis = new Redis(env().REDIS_URL, {
-      // Commands issued before the first connect wait in the offline queue (cold
-      // starts), bounded by commandTimeout. App and Redis share a region, so a
-      // healthy command takes milliseconds.
+      // Deliberately no commandTimeout: ioredis applies it to the AUTH it sends
+      // on connect, and Render's external endpoint takes 2-5s to accept AUTH,
+      // so every connection attempt would time out and reconnect forever.
+      // Callers that need to be fast bound their own waits (lib/timeout.ts).
       maxRetriesPerRequest: 2,
-      connectTimeout: 3_000,
-      commandTimeout: 500,
+      connectTimeout: 10_000,
     });
-    // Without a listener ioredis prints every connection or timeout error as an
+    // Without a listener ioredis prints every connection error as an
     // "Unhandled error event" stack trace. Callers already fall back to Postgres.
     redis.on('error', (err) => console.warn(`redis: ${err.message}`));
     globalForRedis.axlRedis = redis;

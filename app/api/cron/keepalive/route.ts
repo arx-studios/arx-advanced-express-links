@@ -52,11 +52,12 @@ export async function GET(request: Request) {
   });
 
   // Redis is only a cache: a failure is reported but doesn't fail the run.
-  // A cron run usually lands on a fresh instance, so give the TLS connection
-  // time to open instead of hitting the 500ms per-command limit meant for redirects.
+  // A cron run usually lands on a fresh instance, and Render's external endpoint
+  // takes 2-5s to accept AUTH, so wait for the connection rather than using the
+  // 500ms cache limit meant for redirects.
   await step('redis', async () => {
     const redis = getRedis();
-    await waitUntilReady(redis, 5_000);
+    await waitUntilReady(redis, 10_000);
     await redis.ping();
     await flushClicks(redis, getLinkRepository());
   });

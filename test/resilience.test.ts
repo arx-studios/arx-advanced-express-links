@@ -43,6 +43,25 @@ describe('when Redis is down', () => {
     expect(await service.resolve(link.code)).toBeNull();
   });
 
+  it('does not wait on a Redis that never answers (e.g. still logging in)', async () => {
+    const hang = () => new Promise<never>(() => {});
+    const hangingPipeline = { incr: () => hangingPipeline, expire: () => hangingPipeline, ttl: () => hangingPipeline, exec: hang };
+    const hangingRedis = new Proxy({} as Redis, {
+      get: (_target, prop) => (prop === 'multi' ? () => hangingPipeline : hang),
+    });
+    const slowService = new LinkService(new LinkRepository(getPool()), hangingRedis);
+
+    const longUrl = `https://example.com/redis-slow/${Date.now()}`;
+    const { link } = await slowService.create({ ownerId, longUrl });
+
+    const start = performance.now();
+    expect(await slowService.resolve(link.code)).toBe(longUrl);
+    // One 500ms cache read, then Postgres; the cache write is skipped.
+    expect(performance.now() - start).toBeLessThan(1_500);
+
+    expect((await rateLimit(hangingRedis, 'anyone', 10, 60)).allowed).toBe(true);
+  });
+
   it('lets link creation through instead of rate limiting everyone', async () => {
     expect(await rateLimit(deadRedis, 'anyone', 10, 60)).toEqual({
       allowed: true,
