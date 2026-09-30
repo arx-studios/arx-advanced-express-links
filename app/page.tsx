@@ -39,8 +39,16 @@ export default async function Page() {
             <h1 className="text-8xl md:text-9xl font-semibold tracking-tighter text-white leading-none">
               axl
             </h1>
-            <p className="text-white/70 text-xs sm:text-sm tracking-[0.3em] sm:tracking-[0.35em] uppercase mt-1 [text-shadow:0_1px_12px_rgba(0,0,0,0.9)]">
-              Short links by ARX Studios
+            {/* The name spelled out: the bright letters are the ones that make "axl". */}
+            <p
+              aria-label="ARX eXpress Links"
+              className="text-white/45 text-xs sm:text-sm tracking-[0.3em] sm:tracking-[0.35em] uppercase mt-1 [text-shadow:0_1px_12px_rgba(0,0,0,0.9)]"
+            >
+              <span className="text-white">A</span>RX E<span className="text-white">X</span>PRESS{" "}
+              <span className="text-white">L</span>INKS
+            </p>
+            <p className="text-white/55 text-xs tracking-[0.15em] [text-shadow:0_1px_12px_rgba(0,0,0,0.9)]">
+              by ARX Studios
             </p>
           </div>
 
