@@ -22,6 +22,8 @@ export default defineConfig({
       REDIS_URL: 'redis://localhost:6379/1',
       CREATE_LINKS_PER_MINUTE: '1000',
       CRON_SECRET: 'test-cron-secret-0123456789',
+      NEXT_PUBLIC_SUPABASE_URL: 'https://auth-project.test',
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test',
     },
   },
 });
