@@ -57,6 +57,7 @@ describe('keepalive cron', () => {
       authProjectPingedAt: '2026-10-01T03:00:00Z',
       redis: 'ok',
     });
+    expect(Object.keys(body.timingsMs)).toEqual(['postgres', 'authProject', 'redis']);
 
     const [url, init] = fetchSpy.mock.calls[0];
     expect(url).toBe('https://auth-project.test/rest/v1/rpc/keepalive');

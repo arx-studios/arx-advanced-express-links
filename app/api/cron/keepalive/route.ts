@@ -1,4 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
+import type { Redis } from 'ioredis';
 import { NextResponse } from 'next/server';
 import { env } from '@/server/env';
 import { getPool } from '@/server/db';
@@ -23,39 +24,65 @@ export async function GET(request: Request) {
   }
 
   const result: Record<string, unknown> = {};
-  let failed = false;
+  const timingsMs: Record<string, number> = {};
 
-  try {
+  // Runs a step, records how long it took, and reports failure instead of throwing.
+  async function step(name: string, fn: () => Promise<void>): Promise<boolean> {
+    const start = performance.now();
+    try {
+      await fn();
+      result[name] = 'ok';
+      return true;
+    } catch (err) {
+      console.error(`keepalive: ${name} failed`, err);
+      result[name] = 'error';
+      return false;
+    } finally {
+      timingsMs[name] = Math.round(performance.now() - start);
+    }
+  }
+
+  const postgresOk = await step('postgres', async () => {
     const { rows } = await getPool().query<{ links: number }>('SELECT count(*)::int AS links FROM links');
-    result.postgres = 'ok';
     result.links = rows[0].links;
-  } catch (err) {
-    console.error('keepalive: postgres failed', err);
-    result.postgres = 'error';
-    failed = true;
-  }
+  });
 
-  try {
-    result.authProject = 'ok';
+  const authOk = await step('authProject', async () => {
     result.authProjectPingedAt = await pingAuthProject();
-  } catch (err) {
-    console.error('keepalive: auth project failed', err);
-    result.authProject = 'error';
-    failed = true;
-  }
+  });
 
-  try {
-    await getRedis().ping();
-    await flushClicks(getRedis(), getLinkRepository());
-    result.redis = 'ok';
-  } catch (err) {
-    // Redis is only a cache: report it, but the keep-alive itself succeeded.
-    console.error('keepalive: redis failed', err);
-    result.redis = 'error';
-  }
+  // Redis is only a cache: a failure is reported but doesn't fail the run.
+  // A cron run usually lands on a fresh instance, so give the TLS connection
+  // time to open instead of hitting the 500ms per-command limit meant for redirects.
+  await step('redis', async () => {
+    const redis = getRedis();
+    await waitUntilReady(redis, 5_000);
+    await redis.ping();
+    await flushClicks(redis, getLinkRepository());
+  });
+
+  const failed = !postgresOk || !authOk;
+  result.timingsMs = timingsMs;
+  // Shows up in Vercel's runtime logs, since cron responses aren't displayed there.
+  console.log('keepalive', JSON.stringify(result));
 
   // A failed Supabase ping shows up as a failed run in Vercel's cron logs.
   return NextResponse.json(result, { status: failed ? 500 : 200 });
+}
+
+function waitUntilReady(redis: Redis, timeoutMs: number): Promise<void> {
+  if (redis.status === 'ready') return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      redis.off('ready', onReady);
+      reject(new Error(`Redis not ready after ${timeoutMs}ms (status: ${redis.status})`));
+    }, timeoutMs);
+    const onReady = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    redis.once('ready', onReady);
+  });
 }
 
 async function pingAuthProject(): Promise<string> {
