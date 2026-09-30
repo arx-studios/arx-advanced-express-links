@@ -1,5 +1,9 @@
 # Building axl — a URL shortener, step by step
 
+> **Historical:** this guide builds the original Fastify version of axl (commit `c185f7a`).
+> The app has since moved to Next.js; see the README for the current setup. The concepts
+> (layering, cache-aside, click batching, dedupe) all still apply.
+
 You'll build this yourself, one file at a time. Each step has:
 - **What & why**: the concept behind it
 - **Code**: type it in (typing beats copy-pasting for learning)
