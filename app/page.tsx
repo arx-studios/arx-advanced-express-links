@@ -36,18 +36,16 @@ export default async function Page() {
 
         <section className="relative flex flex-col items-center justify-center h-screen px-6">
           <div className="flex flex-col items-center gap-3 text-center">
-            <h1 className="text-8xl md:text-9xl font-semibold tracking-tighter text-white leading-none">
-              axl
-            </h1>
             {/* The name spelled out: the bright letters are the ones that make "axl". */}
-            <p
-              aria-label="ARX eXpress Links"
-              className="text-white/45 text-xs sm:text-sm tracking-[0.3em] sm:tracking-[0.35em] uppercase mt-1 [text-shadow:0_1px_12px_rgba(0,0,0,0.9)]"
+            <h1
+              aria-label="axl: ARX eXpress Links"
+              className="text-6xl sm:text-7xl md:text-8xl font-semibold tracking-tighter text-white/25 leading-[0.95] [text-shadow:0_2px_24px_rgba(0,0,0,0.6)]"
             >
-              <span className="text-white">A</span>RX E<span className="text-white">X</span>PRESS{" "}
-              <span className="text-white">L</span>INKS
-            </p>
-            <p className="text-white/55 text-xs tracking-[0.15em] [text-shadow:0_1px_12px_rgba(0,0,0,0.9)]">
+              <span className="text-white">A</span>RX e<span className="text-white">X</span>press{" "}
+              <br className="sm:hidden" />
+              <span className="text-white">L</span>inks
+            </h1>
+            <p className="text-white/55 text-xs sm:text-sm tracking-[0.3em] uppercase mt-3 [text-shadow:0_1px_12px_rgba(0,0,0,0.9)]">
               by ARX Studios
             </p>
           </div>
