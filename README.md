@@ -4,6 +4,9 @@
 
 Next.js 16 (App Router) · Postgres (Supabase) · Redis/Valkey (Render) · Supabase Auth · Vercel
 
+📚 **Full documentation: [docs/](docs/README.md)** covers architecture, system design,
+request flows, data model, security, deployment, operations and project history.
+
 ## How it works
 
 ```
