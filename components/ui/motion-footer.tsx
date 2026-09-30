@@ -145,13 +145,13 @@ MagneticButton.displayName = "MagneticButton"
 // ── Marquee strip ──────────────────────────────────────────────────────────
 const MarqueeItem = () => (
   <div className="flex items-center space-x-12 px-6 select-none">
-    <span>Short Links</span>
-    <span className="opacity-30">✦</span>
-    <span>axl</span>
-    <span className="opacity-30">✦</span>
-    <span>Instant Redirects</span>
+    <span>Art &amp; Technology</span>
     <span className="opacity-30">✦</span>
     <span>ARX Studios</span>
+    <span className="opacity-30">✦</span>
+    <span>Coming Soon</span>
+    <span className="opacity-30">✦</span>
+    <span>Digital Experiences</span>
     <span className="opacity-30">✦</span>
     <span>Built Different</span>
     <span className="opacity-30">✦</span>
@@ -209,7 +209,7 @@ export function CinematicFooter() {
           ref={bgTextRef}
           className="arx-footer-bg-text absolute -bottom-[4vh] left-1/2 -translate-x-1/2 whitespace-nowrap z-0 pointer-events-none"
         >
-          axl
+          ARX
         </div>
 
         {/* ── Marquee ── */}
@@ -227,7 +227,7 @@ export function CinematicFooter() {
             ref={headingRef}
             className="arx-footer-heading-glow text-5xl md:text-8xl font-black tracking-tighter mb-12 text-center pb-4"
           >
-            Make it short.
+            Something&apos;s coming.
           </h2>
 
           <div ref={linksRef} className="flex flex-col items-center gap-5 w-full">
@@ -238,7 +238,7 @@ export function CinematicFooter() {
               scroll={false}
               className="arx-glass-pill px-10 py-5 rounded-full text-white font-bold text-sm md:text-base"
             >
-              Get Started
+              Get Early Access
             </MagneticButton>
 
             {/* Secondary links */}
@@ -269,9 +269,14 @@ export function CinematicFooter() {
             © {new Date().getFullYear()} ARX Studios. All rights reserved.
           </span>
 
+          {/* <div className="arx-glass-pill px-5 py-2.5 rounded-full flex items-center gap-2 order-1 md:order-2 cursor-default">
+            <span className="text-white/25 text-[10px] font-bold uppercase tracking-widest">Crafted with</span>
+            <span className="arx-footer-heartbeat inline-block text-sm text-red-400">❤</span>
+            <span className="text-white/25 text-[10px] font-bold uppercase tracking-widest">in India</span>
+          </div> */}
+
           <MagneticButton
             as="button"
-            aria-label="Back to top"
             onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
             className="w-11 h-11 rounded-full arx-glass-pill flex items-center justify-center text-white/35 hover:text-white/70 group order-3 transition-colors"
           >
