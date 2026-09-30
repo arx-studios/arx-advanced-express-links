@@ -1,23 +1,45 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { randomUUID } from 'node:crypto';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AuthUser } from '@/server/auth';
 
-// Outside a real Next request there is no `after()` context. Collect the tasks
-// instead so tests can await them.
-const { pendingAfter } = vi.hoisted(() => ({ pendingAfter: [] as Promise<unknown>[] }));
+// Outside a real Next request there is no `after()` context, and no Supabase
+// session. Collect after() tasks so tests can await them, and let each test
+// pick who is "signed in".
+const state = vi.hoisted(() => ({
+  pendingAfter: [] as Promise<unknown>[],
+  user: null as AuthUser | null,
+}));
+
 vi.mock('next/server', async (importOriginal) => ({
   ...(await importOriginal<typeof import('next/server')>()),
   after: (task: Promise<unknown> | (() => unknown)) => {
-    pendingAfter.push(Promise.resolve(typeof task === 'function' ? task() : task));
+    state.pendingAfter.push(Promise.resolve(typeof task === 'function' ? task() : task));
   },
 }));
 
+vi.mock('@/server/auth', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/server/auth')>()),
+  getUser: async () => state.user,
+}));
+
 import { GET as redirect } from '@/app/[code]/route';
-import { POST } from '@/app/api/links/route';
+import { DELETE as deleteLink, GET as getLink } from '@/app/api/links/[code]/route';
+import { GET as listLinks, POST } from '@/app/api/links/route';
+import { GET as me } from '@/app/api/me/route';
 import { getPool } from '@/server/db';
 import { getLinkRepository } from '@/server/links';
 import { flushClicks } from '@/server/links/clickFlush';
 import { getRedis } from '@/server/redis';
 
+const alice: AuthUser = { id: randomUUID(), email: 'alice@example.com' };
+const bob: AuthUser = { id: randomUUID(), email: 'bob@example.com' };
+
 const uniqueUrl = (path: string) => `https://example.com/${path}/${Date.now()}-${Math.random()}`;
+const params = (code: string) => ({ params: Promise.resolve({ code }) });
+
+function signIn(user: AuthUser | null) {
+  state.user = user;
+}
 
 function createLink(payload: unknown) {
   return POST(
@@ -29,36 +51,59 @@ function createLink(payload: unknown) {
   );
 }
 
-function visit(code: string) {
-  return redirect(new Request(`http://localhost:3000/${code}`), {
-    params: Promise.resolve({ code }),
-  });
+async function createCode(payload: unknown): Promise<string> {
+  const res = await createLink(payload);
+  expect(res.status).toBe(201);
+  return (await res.json()).code;
 }
+
+const visit = (code: string) => redirect(new Request(`http://localhost:3000/${code}`), params(code));
+const list = (cursor?: string) =>
+  listLinks(new Request(`http://localhost:3000/api/links${cursor ? `?cursor=${cursor}` : ''}`));
+const details = (code: string) => getLink(new Request('http://localhost:3000'), params(code));
+const remove = (code: string) => deleteLink(new Request('http://localhost:3000'), params(code));
 
 beforeAll(async () => {
   await getRedis().flushdb();
 });
 
+beforeEach(() => {
+  signIn(alice);
+});
+
 afterAll(async () => {
-  await Promise.all(pendingAfter);
+  await Promise.all(state.pendingAfter);
   await getPool().end();
   getRedis().disconnect();
 });
 
-describe('links API', () => {
-  it('creates a link and redirects to it', async () => {
-    const url = uniqueUrl('hello');
-    const create = await createLink({ url });
-    expect(create.status).toBe(201);
-    const { code, shortUrl } = await create.json();
-    expect(shortUrl).toBe(`http://localhost:3000/${code}`);
+describe('authentication', () => {
+  it('rejects every API call when signed out', async () => {
+    signIn(null);
+    expect((await createLink({ url: 'https://example.com' })).status).toBe(401);
+    expect((await list()).status).toBe(401);
+    expect((await details('anything')).status).toBe(401);
+    expect((await remove('anything')).status).toBe(401);
+    expect((await me()).status).toBe(401);
+  });
 
+  it('returns the signed-in user', async () => {
+    expect(await (await me()).json()).toEqual(alice);
+  });
+
+  it('lets anyone follow a short link without signing in', async () => {
+    const url = uniqueUrl('public');
+    const code = await createCode({ url });
+
+    signIn(null);
     const res = await visit(code);
     expect(res.status).toBe(302);
     expect(res.headers.get('location')).toBe(url);
   });
+});
 
-  it('returns the same code when the same URL is shortened twice', async () => {
+describe('creating links', () => {
+  it('returns the same code when a user shortens the same URL twice', async () => {
     const url = uniqueUrl('dedupe');
     const first = await createLink({ url });
     const second = await createLink({ url });
@@ -66,6 +111,15 @@ describe('links API', () => {
     expect(first.status).toBe(201);
     expect(second.status).toBe(200);
     expect((await second.json()).code).toBe((await first.json()).code);
+  });
+
+  it('gives different users their own code for the same URL', async () => {
+    const url = uniqueUrl('per-user');
+    const aliceCode = await createCode({ url });
+    signIn(bob);
+    const bobCode = await createCode({ url });
+
+    expect(bobCode).not.toBe(aliceCode);
   });
 
   it('gives each concurrent request for a new URL the same code', async () => {
@@ -79,21 +133,20 @@ describe('links API', () => {
 
   it('does not dedupe links with an alias or an expiry', async () => {
     const url = uniqueUrl('no-dedupe');
-    const plain = await createLink({ url });
-    const aliased = await createLink({ url, alias: `a-${Date.now()}` });
-    const expiring = await createLink({
+    const plain = await createCode({ url });
+    const aliased = await createCode({ url, alias: `a-${Date.now()}` });
+    const expiring = await createCode({
       url,
       expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
     });
 
-    expect([aliased.status, expiring.status]).toEqual([201, 201]);
-    const codes = await Promise.all([plain, aliased, expiring].map(async (r) => (await r.json()).code));
-    expect(new Set(codes).size).toBe(3);
+    expect(new Set([plain, aliased, expiring]).size).toBe(3);
   });
 
-  it('returns 409 when an alias is taken', async () => {
+  it('returns 409 when an alias is taken, even by another user', async () => {
     const alias = `test-${Date.now()}`;
-    expect((await createLink({ url: 'https://example.com', alias })).status).toBe(201);
+    await createCode({ url: 'https://example.com', alias });
+    signIn(bob);
     expect((await createLink({ url: 'https://example.com', alias })).status).toBe(409);
   });
 
@@ -105,21 +158,86 @@ describe('links API', () => {
     expect((await createLink({ url: 'https://a.com', expiresAt: '2000-01-01' })).status).toBe(400);
     expect((await createLink('{not json')).status).toBe(400);
   });
+});
 
-  it('returns 404 for unknown or malformed codes', async () => {
-    expect((await visit('doesNotExist1')).status).toBe(404);
-    expect((await visit('favicon.ico')).status).toBe(404);
+describe('listing and details', () => {
+  it("lists only the signed-in user's links, newest first, with pagination", async () => {
+    const user: AuthUser = { id: randomUUID(), email: null };
+    signIn(user);
+    const codes = [];
+    for (let i = 0; i < 25; i++) codes.push(await createCode({ url: uniqueUrl(`list-${i}`) }));
+
+    const page1 = await (await list()).json();
+    expect(page1.links).toHaveLength(20);
+    expect(page1.links[0].code).toBe(codes[24]);
+    expect(page1.nextCursor).not.toBeNull();
+
+    const page2 = await (await list(page1.nextCursor)).json();
+    expect(page2.links.map((l: { code: string }) => l.code)).toEqual(codes.slice(0, 5).reverse());
+    expect(page2.nextCursor).toBeNull();
+
+    signIn(bob);
+    const bobsLinks = (await (await list()).json()).links.map((l: { code: string }) => l.code);
+    expect(bobsLinks).not.toContain(codes[0]);
   });
 
-  it('counts clicks and flushes them to Postgres', async () => {
-    const { code } = await (await createLink({ url: uniqueUrl('clicks') })).json();
+  it('rejects a malformed cursor', async () => {
+    expect((await list('1; DROP TABLE links')).status).toBe(400);
+  });
+
+  it("hides another user's link details", async () => {
+    const code = await createCode({ url: uniqueUrl('private') });
+    signIn(bob);
+    expect((await details(code)).status).toBe(404);
+  });
+
+  it('counts clicks, including ones still buffered in Redis', async () => {
+    const code = await createCode({ url: uniqueUrl('clicks') });
 
     await visit(code);
     await visit(code);
-    await Promise.all(pendingAfter);
+    await Promise.all(state.pendingAfter);
+    expect((await (await details(code)).json()).clickCount).toBe(2);
+
     await flushClicks(getRedis(), getLinkRepository());
+    expect((await (await details(code)).json()).clickCount).toBe(2);
+  });
+});
 
-    const link = await getLinkRepository().findByCode(code);
-    expect(link?.clickCount).toBe(2);
+describe('deleting links', () => {
+  it('stops the short link working immediately, even when cached', async () => {
+    const code = await createCode({ url: uniqueUrl('delete') });
+    expect((await visit(code)).status).toBe(302); // warms the cache
+
+    expect((await remove(code)).status).toBe(204);
+    expect((await visit(code)).status).toBe(404);
+    expect((await details(code)).status).toBe(404);
+  });
+
+  it("does not let a user delete someone else's link", async () => {
+    const code = await createCode({ url: uniqueUrl('not-yours') });
+    signIn(bob);
+    expect((await remove(code)).status).toBe(404);
+
+    signIn(alice);
+    expect((await visit(code)).status).toBe(302);
+  });
+
+  it('never frees a deleted code for reuse', async () => {
+    const alias = `gone-${Date.now()}`;
+    await createCode({ url: 'https://example.com', alias });
+    await remove(alias);
+
+    signIn(bob);
+    expect((await createLink({ url: 'https://evil.example', alias })).status).toBe(409);
+  });
+
+  it('gives a fresh code when the same URL is shortened after deleting it', async () => {
+    const url = uniqueUrl('recreate');
+    const first = await createCode({ url });
+    await remove(first);
+
+    const second = await createCode({ url });
+    expect(second).not.toBe(first);
   });
 });

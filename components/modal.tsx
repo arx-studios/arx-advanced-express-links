@@ -5,7 +5,7 @@ import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import { AnimatePresence, motion } from "framer-motion"
 import Link from "next/link"
 import { X } from "lucide-react"
-import { createClient } from "@/lib/client"
+import { createClient } from "@/lib/supabase/client"
 
 // ── helpers ───────────────────────────────────────────────────────────────
 

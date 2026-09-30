@@ -10,6 +10,8 @@ await client.query(`
     applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
   )
 `);
+// Keep Supabase's Data API away from this table too (see 001_init.sql).
+await client.query('ALTER TABLE schema_migrations ENABLE ROW LEVEL SECURITY');
 
 const { rows } = await client.query<{ name: string }>('SELECT name FROM schema_migrations');
 const applied = new Set(rows.map((r) => r.name));

@@ -2,10 +2,12 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { CODE_PATTERN, isReserved } from '@/lib/codes';
 import { parseTargetUrl } from '@/lib/targetUrl';
+import { getUser, unauthorized } from '@/server/auth';
 import { env } from '@/server/env';
-import { getLinkService } from '@/server/links';
+import { getLinkService, getUserRepository } from '@/server/links';
+import { toLinkJson } from '@/server/links/linkJson';
 import { AliasTakenError } from '@/server/links/linkService';
-import { clientIp, rateLimit } from '@/server/rateLimit';
+import { rateLimit } from '@/server/rateLimit';
 import { getRedis } from '@/server/redis';
 
 export const dynamic = 'force-dynamic';
@@ -16,15 +18,31 @@ const CreateLinkBody = z.object({
   expiresAt: z.coerce.date().optional(),
 });
 
+const CURSOR_PATTERN = /^\d{1,19}$/;
+
+export async function GET(request: Request) {
+  const user = await getUser();
+  if (!user) return unauthorized();
+
+  const cursor = new URL(request.url).searchParams.get('cursor') ?? undefined;
+  if (cursor !== undefined && !CURSOR_PATTERN.test(cursor)) {
+    return NextResponse.json({ error: 'Invalid cursor' }, { status: 400 });
+  }
+
+  const page = await getLinkService().list(user.id, cursor);
+  return NextResponse.json({
+    links: page.links.map((link) => toLinkJson(link, env().BASE_URL)),
+    nextCursor: page.nextCursor,
+  });
+}
+
 export async function POST(request: Request) {
+  const user = await getUser();
+  if (!user) return unauthorized();
+
   const { BASE_URL, CREATE_LINKS_PER_MINUTE } = env();
 
-  const limit = await rateLimit(
-    getRedis(),
-    `create:${clientIp(request)}`,
-    CREATE_LINKS_PER_MINUTE,
-    60,
-  );
+  const limit = await rateLimit(getRedis(), `create:${user.id}`, CREATE_LINKS_PER_MINUTE, 60);
   if (!limit.allowed) {
     return NextResponse.json(
       { error: 'Too many links created, slow down' },
@@ -61,20 +79,14 @@ export async function POST(request: Request) {
   }
 
   try {
+    await getUserRepository().upsert(user);
     const { link, created } = await getLinkService().create({
+      ownerId: user.id,
       longUrl: target.url,
       alias,
       expiresAt,
     });
-    return NextResponse.json(
-      {
-        code: link.code,
-        shortUrl: `${BASE_URL}/${link.code}`,
-        longUrl: link.longUrl,
-        expiresAt: link.expiresAt,
-      },
-      { status: created ? 201 : 200 },
-    );
+    return NextResponse.json(toLinkJson(link, BASE_URL), { status: created ? 201 : 200 });
   } catch (err) {
     if (err instanceof AliasTakenError) {
       return NextResponse.json({ error: err.message }, { status: 409 });

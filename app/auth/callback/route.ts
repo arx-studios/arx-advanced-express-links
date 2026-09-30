@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/server"
+import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 
 export async function GET(request: Request) {
@@ -15,5 +15,5 @@ export async function GET(request: Request) {
     await supabase.auth.verifyOtp({ token_hash: tokenHash, type })
   }
 
-  return NextResponse.redirect(`${origin}/welcome`)
+  return NextResponse.redirect(`${origin}/dashboard`)
 }

@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "migrate": "tsx --env-file=.env scripts/migrate.ts",
+    "migrate": "tsx --env-file=.env scripts/migrate.mts",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"

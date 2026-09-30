@@ -4,7 +4,7 @@ import { useState } from "react"
 import Link from "next/link"
 import { ShaderAnimation } from "@/components/ui/shader-animation"
 import { Navbar } from "@/components/navbar"
-import { createClient } from "@/lib/client"
+import { createClient } from "@/lib/supabase/client"
 
 const GoogleIcon = () => (
   <svg viewBox="0 0 24 24" className="w-5 h-5 flex-shrink-0" aria-hidden="true">
