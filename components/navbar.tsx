@@ -31,7 +31,7 @@ export function Navbar() {
             href="/"
             className="text-white font-semibold tracking-[0.25em] uppercase text-sm hover:text-white/70 transition-colors duration-200"
           >
-            ARX Studios
+            axl
           </Link>
         </motion.header>
       )}

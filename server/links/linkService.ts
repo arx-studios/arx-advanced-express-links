@@ -112,21 +112,30 @@ export class LinkService {
   async list(ownerId: string, cursor?: string): Promise<LinkPage> {
     // Fetch one extra row to know whether another page exists.
     const rows = await this.repo.listByOwner(ownerId, { before: cursor, limit: PAGE_SIZE + 1 });
-    const links = rows.slice(0, PAGE_SIZE);
+    const page = rows.slice(0, PAGE_SIZE);
     return {
-      links,
-      nextCursor: rows.length > PAGE_SIZE ? links[links.length - 1].id : null,
+      links: await this.withBufferedClicks(page),
+      nextCursor: rows.length > PAGE_SIZE ? page[page.length - 1].id : null,
     };
   }
 
-  // Includes clicks still buffered in Redis, so the count is current rather
-  // than up to one flush interval behind.
+  // Adds clicks still buffered in Redis, so counts are current rather than up
+  // to one flush interval behind. One MGET for the whole page.
+  private async withBufferedClicks(links: Link[]): Promise<Link[]> {
+    if (links.length === 0) return links;
+    const buffered = await this.redis.mget(links.map((link) => `clicks:${link.code}`));
+    return links.map((link, i) => ({
+      ...link,
+      clickCount: link.clickCount + (Number(buffered[i]) || 0),
+    }));
+  }
+
   async get(ownerId: string, code: string): Promise<Link | null> {
     const link = await this.repo.findOwned(ownerId, code);
     if (!link) return null;
 
-    const buffered = Number(await this.redis.get(`clicks:${code}`)) || 0;
-    return { ...link, clickCount: link.clickCount + buffered };
+    const [withClicks] = await this.withBufferedClicks([link]);
+    return withClicks;
   }
 
   async delete(ownerId: string, code: string): Promise<boolean> {

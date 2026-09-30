@@ -181,6 +181,20 @@ describe('listing and details', () => {
     expect(bobsLinks).not.toContain(codes[0]);
   });
 
+  it('shows browsers a page for unknown links and gives scripts JSON', async () => {
+    const browser = await redirect(
+      new Request('http://localhost:3000/nope12345', { headers: { Accept: 'text/html,*/*' } }),
+      params('nope12345'),
+    );
+    expect(browser.status).toBe(404);
+    expect(browser.headers.get('content-type')).toContain('text/html');
+    expect(await browser.text()).toContain('Link not found');
+
+    const script = await visit('nope12345');
+    expect(script.status).toBe(404);
+    expect(await script.json()).toEqual({ error: 'Not found' });
+  });
+
   it('rejects a malformed cursor', async () => {
     expect((await list('1; DROP TABLE links')).status).toBe(400);
   });
