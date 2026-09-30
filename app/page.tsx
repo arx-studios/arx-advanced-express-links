@@ -38,12 +38,12 @@ export default async function Page() {
           <div className="flex flex-col items-center gap-3 text-center">
             {/* The name spelled out: the bright letters are the ones that make "axl". */}
             <h1
-              aria-label="axl: ARX eXpress Links"
-              className="text-6xl sm:text-7xl md:text-8xl font-semibold tracking-tighter text-white/25 leading-[0.95] [text-shadow:0_2px_24px_rgba(0,0,0,0.6)]"
+              aria-label="axl: Advanced eXpress Links"
+              className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-semibold tracking-tighter text-white/25 leading-[0.95] [text-shadow:0_2px_24px_rgba(0,0,0,0.6)]"
             >
-              <span className="text-white">A</span>RX e<span className="text-white">X</span>press{" "}
+              <span className="text-white">A</span>dvanced{" "}
               <br className="sm:hidden" />
-              <span className="text-white">L</span>inks
+              e<span className="text-white">X</span>press <span className="text-white">L</span>inks
             </h1>
             <p className="text-white/55 text-xs sm:text-sm tracking-[0.3em] uppercase mt-3 [text-shadow:0_1px_12px_rgba(0,0,0,0.9)]">
               by ARX Studios

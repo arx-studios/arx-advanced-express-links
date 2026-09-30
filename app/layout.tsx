@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "axl by ARX Studios",
-  description: "axl (ARX eXpress Links): short links by ARX Studios",
+  description: "axl (Advanced eXpress Links): short links by ARX Studios",
 };
 
 export default function RootLayout({
