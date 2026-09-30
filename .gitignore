@@ -51,3 +51,6 @@ next-env.d.ts
 # axl
 !.env.example
 /dist
+
+# Local copies of production database credentials and certificates
+/certs/

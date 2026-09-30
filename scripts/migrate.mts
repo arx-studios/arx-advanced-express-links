@@ -1,8 +1,17 @@
 import { readdir, readFile } from 'node:fs/promises';
 import pg from 'pg';
+import { connectionConfig } from '../lib/pgConnection';
 
-const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
+if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is not set');
+
+// A CA certificate turns on verified TLS (Supabase). Locally it's easiest to
+// point at the downloaded file; on a server the PEM itself can be in the env.
+const caFile = process.env.DATABASE_CA_CERT_FILE;
+const caCert = caFile ? await readFile(caFile, 'utf8') : process.env.DATABASE_CA_CERT;
+
+const client = new pg.Client(connectionConfig(process.env.DATABASE_URL, caCert));
 await client.connect();
+console.log(`connected to ${new URL(process.env.DATABASE_URL).host}${caCert ? ' (verified TLS)' : ''}`);
 
 await client.query(`
   CREATE TABLE IF NOT EXISTS schema_migrations (

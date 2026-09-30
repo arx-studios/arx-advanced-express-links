@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import type { Redis } from 'ioredis';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { connectionConfig, getPool } from '@/server/db';
+import { connectionConfig } from '@/lib/pgConnection';
+import { getPool } from '@/server/db';
 import { LinkRepository } from '@/server/links/linkRepository';
 import { LinkService } from '@/server/links/linkService';
 import { rateLimit } from '@/server/rateLimit';
