@@ -149,7 +149,7 @@ const MarqueeItem = () => (
     <span className="opacity-30">✦</span>
     <span>ARX Studios</span>
     <span className="opacity-30">✦</span>
-    <span>Coming Soon</span>
+    <span>Now Live</span>
     <span className="opacity-30">✦</span>
     <span>Digital Experiences</span>
     <span className="opacity-30">✦</span>
@@ -227,7 +227,7 @@ export function CinematicFooter() {
             ref={headingRef}
             className="arx-footer-heading-glow text-5xl md:text-8xl font-black tracking-tighter mb-12 text-center pb-4"
           >
-            Something&apos;s coming.
+            It&apos;s here.
           </h2>
 
           <div ref={linksRef} className="flex flex-col items-center gap-5 w-full">
@@ -238,7 +238,7 @@ export function CinematicFooter() {
               scroll={false}
               className="arx-glass-pill px-10 py-5 rounded-full text-white font-bold text-sm md:text-base"
             >
-              Get Early Access
+              Get Started
             </MagneticButton>
 
             {/* Secondary links */}
