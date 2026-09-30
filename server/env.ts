@@ -8,6 +8,8 @@ const EnvSchema = z.object({
   DATABASE_CA_CERT: z.string().min(1).optional(),
   REDIS_URL: z.string().min(1),
   CREATE_LINKS_PER_MINUTE: z.coerce.number().int().positive().default(10),
+  // Shared secret Vercel Cron sends as "Authorization: Bearer <CRON_SECRET>".
+  CRON_SECRET: z.string().min(16).optional(),
 });
 
 export type Env = z.infer<typeof EnvSchema>;
